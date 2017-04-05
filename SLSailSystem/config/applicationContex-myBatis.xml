@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:context="http://www.springframework.org/schema/context" xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.3.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.3.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.3.xsd">
+
+	<!-- 读取jdbc配置文件 -->
+	<context:property-placeholder location="classpath:jdbc.properties" />
+
+	<!-- JNDID数据源 -->
+	<bean name="dataSource" class="org.apache.commons.dbcp.BasicDataSource"
+		destroy-method="close" scope="singleton">
+		<property name="driverClassName" value="${jdbc.Driver}" />
+		<property name="url" value="${jdbc.Url}"/>
+		<property name="username" value="${jdbc.UserName}"/>
+		<property name="password" value="${jdbc.PassWord}"/>
+		<property name="initialSize" value="${jdbc.initialSize}"/>
+		<property name="maxActive" value="${jdbc.maxActive}"/>
+		<property name="maxIdle" value="${jdbc.maxIdle}"/>
+		<property name="minIdle" value="${jdbc.minIdle}"/>
+		<property name="maxWait" value="${jdbc.maxWait}"/>
+		<!-- <property name="removeAbandoned" value="${jdbc.removeAbandoned}"/>
+		<property name="removeAbandonedTimeout" value="${jdbc.removeAbandonedTimeout}"/> -->
+		<!-- sql心跳,只重启数据库的时候可以重新建立连接，废弃旧连接
+		开启Evict循环校验 -->
+		<property name="testWhileIdle" value="true"/>
+		<!-- 定义时间间隔 -->
+		<property name="timeBetweenEvictionRunsMillis" value="60000"/>
+		<property name="testOnBorrow" value="false"/>
+		<property name="testOnReturn" value="false"/>
+		<!-- j校验使用的SQL -->
+		<property name="validationQuery" value="select 1"/>
+		<property name="numTestsPerEvictionRun" value="${jdbc.maxActive}"/>
+	</bean>
+	
+	<!-- 事物配置 -->
+	<bean name="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource"/>
+	</bean>
+	<!-- session工厂 -->
+	<bean name="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<property name="dataSource" ref="dataSource"/>
+		<property name="configLocation" value="classpath:myBatis-config.xml"/>
+	</bean>
+	<!-- 事务管理 -->
+	<!-- 定义 txAdvice事物管理器，hl开头的处理，异常回滚-->
+	<tx:advice id="txAdvice" transaction-manager="transactionManager">
+		<tx:attributes>
+			<tx:method name="hl*" propagation="REQUIRED" rollback-for="Exception"/>
+		</tx:attributes>
+	</tx:advice>
+	
+	<aop:aspectj-autoproxy/>
+	<aop:config proxy-target-class="true">
+		<aop:pointcut expression="execution(* *org.slsale.service..*(..))" id="pc"/>
+		<aop:advisor advice-ref="txAdvice" pointcut-ref="pc"/>
+	</aop:config>
+
+	
+	<!-- mapper映射 org.slsale.dao-->
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<property name="basePackage" value="org.slsale.dao"/>
+	</bean>
+	<!-- redis的配置 -->
+	<bean id="jedisPoolConfig" class="redis.clients.jedis.JedisPoolConfig">
+		<property name="maxActive" value="90"/>
+		<property name="maxIdle" value="5"/>
+		<property name="maxWait" value="1000"/>
+		<property name="testOnBorrow" value="true"/>
+	</bean>
+	<bean id="jedisPool" class="redis.clients.jedis.JedisPool" destroy-method="destroy">
+		<constructor-arg ref="jedisPoolConfig"/>
+		<constructor-arg value="127.0.0.1"/>
+		<constructor-arg value="6379"/>
+	</bean>
+	<bean id="redisAPI" class="org.slsale.common.RedisAPI">
+		<property name="jedisPool" ref="jedisPool"></property>
+	</bean>
+
+</beans>
